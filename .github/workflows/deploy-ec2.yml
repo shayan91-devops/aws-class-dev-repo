@@ -1,0 +1,42 @@
+name: Deploy to AWS EC2
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'index.html'
+      - 'scripts/**'
+      - '.github/workflows/deploy-ec2.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Upload index.html
+        run: |
+          scp -i ~/.ssh/deploy_key \
+            index.html \
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/tmp/index.html"
+
+      - name: Install nginx and deploy site
+        run: |
+          scp -i ~/.ssh/deploy_key \
+            scripts/setup-nginx.sh \
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/tmp/setup-nginx.sh"
+
+          ssh -i ~/.ssh/deploy_key \
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
+            "chmod +x /tmp/setup-nginx.sh && /tmp/setup-nginx.sh"
